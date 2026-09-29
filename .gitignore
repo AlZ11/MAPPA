@@ -1,0 +1,24 @@
+# Python / tooling
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Research data never goes in git (CLAUDE.md: never commit APKs or raw data).
+# data_dir defaults to ./data; the patterns below also catch data kept elsewhere.
+/data/
+*.apk
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.db
+
+# Secrets (ANDROZOO_API_KEY) live in the environment, never in files in the repo.
+.env
+.env.*

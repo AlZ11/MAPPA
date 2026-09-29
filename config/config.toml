@@ -1,0 +1,43 @@
+# MAPPA 2.0 collector configuration (Task 01).
+#
+# The effective settings are copied into the `snapshots` table when a snapshot starts,
+# so every snapshot can be traced back to the exact values that produced it.
+# Relative paths are resolved against this file's directory, not the shell's.
+# Environment overrides: MAPPA_CONFIG (which file), MAPPA_DATA_DIR, MAPPA_CONTACT_EMAIL.
+# Secrets (ANDROZOO_API_KEY) come from the environment only: never put them here.
+
+# Where the SQLite db, blobs, APKs and logs live. Gitignored.
+# OPEN DECISION 4 (Alex/supervisor): CSIRO storage vs laptop, retention rules.
+data_dir = "../data"
+
+# Which Google Play store to sample, and the listing language.
+country = "au"
+lang = "en"
+
+# Target sample size for the snapshot.
+target_n = 1000
+
+# Identifies the project in every request; contact_email is appended to it.
+user_agent = "MAPPA-2.0-research-crawler/0.1 (academic mHealth privacy study)"
+
+# REQUIRED. OPEN DECISION 5: the project/CSIRO contact address, supplied by Alex.
+# Never a personal address. Every command refuses to run until this is set, here or
+# via MAPPA_CONTACT_EMAIL.
+# contact_email = ""
+
+# Politeness limits (CLAUDE.md ethics rules).
+rate_limit_per_domain_rps = 1.0
+max_parallel_domains = 4
+
+# Fixed before any data is seen, so the long-tail sample can't be re-drawn until it
+# looks good. Recorded with every snapshot.
+random_seed = 20261005
+
+# OPEN DECISION 3: is AndroZoo approved? Only implemented sources are accepted.
+# An empty list means no source is approved: APKs are recorded as `skipped`.
+apk_sources = ["androzoo"]
+
+[retry]
+max_attempts = 4
+backoff_initial_s = 2.0
+backoff_max_s = 60.0
