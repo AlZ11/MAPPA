@@ -16,8 +16,49 @@ def test_valid_config_loads_with_the_task_defaults(config_path: Path) -> None:
     assert (settings.country, settings.lang, settings.target_n) == ("au", "en", 1000)
     assert settings.rate_limit_per_domain_rps == 1.0
     assert settings.max_parallel_domains == 4
-    assert settings.apk_sources == ("androzoo",)
+    assert settings.apk_sources == ()  # no APK source approved yet
     assert settings.androzoo_api_key is None
+    assert settings.datasafety_fetcher == "browser"
+    assert (settings.inclusion.top_n, settings.inclusion.long_tail_n) == (800, 200)
+
+
+def test_input_files_and_dirs_default_next_to_the_config(config_path: Path) -> None:
+    settings = load_config(config_path, env={})
+    here = config_path.parent
+    assert settings.queries_file == here / "queries.txt"
+    assert settings.seed_file == here / "seed_apps.csv"
+    assert settings.dev_sample_file == here / "dev_apps.csv"
+    assert settings.reports_dir == (here / "../reports").resolve()
+    # synthetic data defaults to a sibling of the real data dir, never inside it
+    assert settings.synthetic_data_dir == settings.data_dir.parent / "data-dev"
+
+
+@pytest.mark.parametrize(
+    "dirs",
+    [
+        'data_dir = "data"\nsynthetic_data_dir = "data"',
+        'data_dir = "data"\nsynthetic_data_dir = "data/dev"',
+        'data_dir = "store/data"\nsynthetic_data_dir = "store"',
+    ],
+    ids=["same", "synthetic-inside-real", "real-inside-synthetic"],
+)
+def test_synthetic_and_real_data_dirs_must_be_separate(
+    write_config: Callable[[str], Path], dirs: str
+) -> None:
+    path = write_config(f'{dirs}\ncontact_email = "{TEST_CONTACT}"\n')
+    with pytest.raises(ConfigError, match="separate directories"):
+        load_config(path, env={})
+
+
+def test_inclusion_strata_must_add_up_to_target_n(write_config: Callable[[str], Path]) -> None:
+    path = write_config(VALID_TOML + "[inclusion]\ntop_n = 800\nlong_tail_n = 100\n")
+    with pytest.raises(ConfigError, match="must equal target_n"):
+        load_config(path, env={})
+
+
+def test_chromium_override_comes_from_the_environment(config_path: Path, tmp_path: Path) -> None:
+    settings = load_config(config_path, env={"MAPPA_CHROMIUM_EXECUTABLE": str(tmp_path / "chrome")})
+    assert settings.chromium_executable == (tmp_path / "chrome").resolve()
 
 
 @pytest.mark.parametrize(
@@ -139,4 +180,8 @@ def test_invalid_toml_is_a_clear_error(write_config: Callable[[str], Path]) -> N
 
 def test_committed_config_is_valid_once_a_contact_is_supplied() -> None:
     settings = load_config(REPO_CONFIG, env={"MAPPA_CONTACT_EMAIL": TEST_CONTACT})
-    assert settings.data_dir == (REPO_CONFIG.parent.parent / "data").resolve()
+    repo = REPO_CONFIG.parent.parent
+    assert settings.data_dir == (repo / "data").resolve()
+    assert settings.synthetic_data_dir == (repo / "data-dev").resolve()
+    assert settings.reports_dir == (repo / "reports").resolve()
+    assert settings.apk_sources == ()

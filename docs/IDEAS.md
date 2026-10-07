@@ -3,17 +3,19 @@
 Parked here so they don't creep into the task being built (CLAUDE.md: do not build beyond
 the current task file).
 
-- **Refuse placeholder contact addresses in the HTTP client (M1).** The config only checks
-  that `contact_email` looks like an address, so tests can use `@example.org`. The client
-  that sends real requests should also refuse reserved domains (`example.*`, `*.invalid`,
-  `*.test`), so a real crawl can never go out with a fake contact.
-- **`mappa blobs verify` before freezing a snapshot (M6).** Re-hash every blob and check
-  every `raw_blob` pointer resolves; record the result in `snapshot_manifest.json`.
-  `BlobStore.get` already verifies each blob it reads; this would check the whole store in
-  one pass.
+- **More search results per term, if the candidate pool is too small.** The first live
+  run shows how many apps one results page holds. The Node `google-play-scraper` pages
+  further, up to 250 per term, using a token in the page. Only worth the extra requests if
+  the eligible pool falls well short of 1,000.
+- **Fetch Data Safety pages over plain HTTP.** The label is embedded in the server's HTML,
+  which is where the Node scraper reads it. If the saved fixtures confirm it, a plain HTTP
+  fetch is faster than rendering and uses the same client as the other Google requests
+  (`datasafety_fetcher = "http"`).
+- **Rate-limit by registrable domain instead of hostname.** `a.example.com` and
+  `b.example.com` currently count as different sites. Needs the Public Suffix List.
 - **Compress blobs only if disk becomes a problem.** Hash the raw bytes, store them
-  zstd-compressed. Decide after M4 measures real page sizes; not worth the complexity if a
-  snapshot stays in the low gigabytes.
+  zstd-compressed. Decide after the dev run measures real page sizes.
 - **Warn when `data_dir` is inside the git repo but not ignored.** `.gitignore` covers
-  `data/`, `*.apk` and `*.sqlite*`, but a custom data dir such as `snapshots/` inside the
-  repo would not be covered.
+  `data/`, `data-dev/`, `*.apk` and `*.sqlite*`, but not a custom directory name.
+- **Done since first noted:** live requests refusing placeholder contact addresses
+  (`collect/live.py`), and full blob verification before freezing (`reports/freeze.py`).

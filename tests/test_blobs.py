@@ -123,11 +123,18 @@ def test_no_temp_files_are_left_behind(store: BlobStore) -> None:
     assert leftovers == []
 
 
-def test_sidecar_row_is_restored_if_a_crash_lost_it(store: BlobStore, engine: Engine) -> None:
-    digest = store.put(b"written, then the process died", "text/html")
-    with engine.begin() as conn:
-        conn.execute(blobs.delete())
-    store.put(b"written, then the process died", "text/html")
+def test_sidecar_row_is_written_if_a_crash_left_only_the_file(
+    store: BlobStore, engine: Engine
+) -> None:
+    """put() writes the file, then the row. Simulate dying in between: file, no row."""
+    data = b"written, then the process died"
+    digest = hashlib.sha256(data).hexdigest()
+    path = store.path_for(digest)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(data)
+    assert _sidecar_rows(engine) == []
+
+    assert store.put(data, "text/html") == digest
     assert [row["sha256"] for row in _sidecar_rows(engine)] == [digest]
 
 
@@ -135,7 +142,9 @@ def test_put_can_share_the_callers_transaction(store: BlobStore, engine: Engine)
     """A blob and the row that cites it can be committed together."""
     with engine.begin() as conn:
         conn.execute(
-            insert(snapshots).values(snapshot_id="dev-01", started_at=utc_now(), config_json={})
+            insert(snapshots).values(
+                snapshot_id="dev-01", sample="full", started_at=utc_now(), config_json={}
+            )
         )
         digest = store.put(b'["com.example.app"]', "application/json", conn=conn)
         conn.execute(

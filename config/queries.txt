@@ -1,0 +1,206 @@
+# MAPPA 2.0 discovery search terms (Task 01, M1). DRAFT for Alex's review.
+#
+# Each term is searched once on Google Play with country="au", lang="en".
+# Format: one term per line. "## <name>" starts a category (used only to group counts
+# in SAMPLING.md). Other lines starting with "#" are comments. Blank lines are ignored.
+#
+# How the terms were chosen:
+# - Generic phrases people type, not brand names, so no company is favoured. Apps that
+#   must be in the sample regardless of search go in seed_apps.csv instead.
+# - Australian wording where it differs (chemist, GP, bulk billing, eScript, Medicare,
+#   pathology, counselling, immunisation, centre, colour, apnoea).
+# - Some terms overlap on purpose: a search returns only one page of results, so
+#   overlapping terms reach further down the same niche. Duplicate apps are merged by
+#   package name.
+# - The last category is outside the task's topic list: keep or delete.
+
+## Fitness and activity
+fitness tracker
+workout planner
+home workout
+step counter
+pedometer
+activity tracker
+strength training
+yoga
+pilates
+HIIT workout
+
+## Running and cycling
+running tracker
+running coach
+couch to 5k
+marathon training
+cycling tracker
+walking tracker
+swim tracker
+
+## Diet and nutrition
+calorie counter
+food diary
+nutrition tracker
+macro tracker
+meal planner
+healthy recipes
+intermittent fasting
+water reminder
+low FODMAP diet
+food allergy
+
+## Weight loss
+weight loss
+weight tracker
+BMI calculator
+diet plan
+weight loss program
+
+## Sleep
+sleep tracker
+sleep sounds
+sleep cycle alarm
+snoring
+insomnia
+sleep apnoea
+white noise
+
+## Meditation
+meditation
+guided meditation
+mindfulness
+breathing exercises
+relaxation
+stress relief
+
+## Mental health and therapy
+mental health
+mood tracker
+anxiety
+depression
+online therapy
+online counselling
+psychologist
+CBT
+self care
+ADHD
+PTSD
+eating disorder
+crisis support
+
+## Women's health
+period tracker
+ovulation tracker
+fertility tracker
+IVF
+pregnancy tracker
+pregnancy week by week
+contraception reminder
+menopause
+PCOS
+endometriosis
+pelvic floor exercises
+
+## Baby and child health
+baby tracker
+breastfeeding tracker
+baby sleep
+baby feeding
+newborn care
+child development
+kids health
+immunisation record
+
+## Chronic conditions
+diabetes
+blood sugar tracker
+glucose monitor
+blood pressure
+heart rate monitor
+ECG
+cholesterol
+asthma
+COPD
+migraine
+arthritis
+chronic pain
+epilepsy
+kidney disease
+cancer
+
+## Medication reminders
+medication reminder
+pill reminder
+medicine tracker
+medication list
+prescription reminder
+
+## Pharmacy
+pharmacy
+chemist
+online chemist
+prescription delivery
+eScript
+medicine information
+
+## Telehealth and GP booking
+telehealth
+GP appointment
+doctor appointment
+bulk billing doctor
+online doctor
+video doctor consultation
+online prescription
+medical centre
+after hours doctor
+dentist booking
+
+## Symptom checkers and AI health assistants
+symptom checker
+AI doctor
+AI health assistant
+health chatbot
+AI therapist
+AI calorie counter
+AI personal trainer
+skin check
+mole check
+
+## Health records
+health records
+my health record
+medical records
+Medicare
+pathology results
+vaccination certificate
+
+## Quitting smoking or alcohol
+quit smoking
+quit vaping
+alcohol tracker
+drink less
+sobriety counter
+addiction recovery
+
+## Hearing and vision
+hearing test
+hearing aid
+tinnitus
+sound amplifier
+eye test
+eye exercises
+colour blind test
+
+## Physiotherapy
+physiotherapy exercises
+physio
+back pain
+injury rehab
+knee rehab
+posture
+sports injury
+
+## Outside the task's topic list (Claude's additions, keep or delete)
+health app
+first aid
+emergency
+blood donation
+health insurance
