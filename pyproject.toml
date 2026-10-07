@@ -5,6 +5,7 @@ description = "MAPPA 2.0: evidence-backed privacy and security assessment of Aus
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "google-play-scraper>=1.2.7",
     "pydantic>=2.13.5",
     "sqlalchemy>=2.1.1",
     "structlog>=26.1.0",
