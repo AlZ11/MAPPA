@@ -90,6 +90,7 @@ class Coverage:
     discovered_by_source: dict[str, int] = field(default_factory=dict)
     apps: list[AppLine] = field(default_factory=list)
     failures: list[tuple[str, str, str, int]] = field(default_factory=list)
+    skips: list[tuple[str, str, int]] = field(default_factory=list)  # decisions, not failures
     runs: int = 0
     run_seconds: float = 0.0
     first_start: datetime | None = None
@@ -184,6 +185,7 @@ def build(engine: Engine, snapshot_id: str, *, purpose: str, data_dir: Path) -> 
         _apks(conn, snapshot_id, lines)
         coverage.apps = sorted(lines.values(), key=lambda a: a.app_id)
         coverage.failures = _failures(conn, snapshot_id, coverage)
+        coverage.skips = _skips(conn, snapshot_id, coverage)
         _runs(conn, coverage)
     return coverage
 
@@ -240,6 +242,10 @@ def render_markdown(coverage: Coverage) -> str:
         f"terms with zero results: {coverage.zero_result_queries}.\n"
     )
 
+    if coverage.skips:
+        out.write("\nSkipped by decision (not failures): ")
+        out.write("; ".join(f"{stage} x{n}: {reason}" for stage, reason, n in coverage.skips))
+        out.write("\n")
     out.write("\n## Top failure reasons\n\n")
     if coverage.failures:
         out.write("| Stage | Status | Reason | Count |\n|---|---|---|---:|\n")
@@ -394,7 +400,7 @@ def _failures(
     stage_tables: list[tuple[str, Any, tuple[str, ...]]] = [
         ("policy", policy_docs, ("ok", "not_provided")),
         ("label", label_status, ("ok", "not_provided")),
-        ("apk", apks, ("ok",)),
+        ("apk", apks, ("ok", "skipped")),
     ]
     for stage, table, fine in stage_tables:
         for row in conn.execute(select(table).where(table.c.snapshot_id == snapshot_id)):
@@ -405,6 +411,15 @@ def _failures(
             if stage == "label" and row.parse_error:
                 counts[(stage, "parse error", _reason(row.parse_error))] += 1
     return [(s, st, r, n) for (s, st, r), n in counts.most_common(10)]
+
+
+def _skips(conn: Connection, snapshot_id: str, coverage: Coverage) -> list[tuple[str, str, int]]:
+    included = {a.app_id for a in coverage.included}
+    counts: Counter[str] = Counter()
+    for row in conn.execute(select(apks).where(apks.c.snapshot_id == snapshot_id)):
+        if row.app_id in included and str(row.status) == "skipped":
+            counts[_reason(row.detail)] += 1
+    return [("apk", reason, n) for reason, n in counts.most_common()]
 
 
 def _runs(conn: Connection, coverage: Coverage) -> None:

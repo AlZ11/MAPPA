@@ -44,7 +44,7 @@ from mappa.models.types import utc_now
 from mappa.provenance import git_commit
 from mappa.reports import coverage as coverage_report
 from mappa.storage.blobs import BlobError, BlobStore
-from mappa.storage.db import SCHEMA_VERSION, make_engine
+from mappa.storage.db import SCHEMA_VERSION
 from mappa.storage.layout import StoreLayout
 from mappa.storage.queries import strings
 from mappa.storage.snapshots import require_snapshot
@@ -99,7 +99,7 @@ def freeze(
     if info.frozen_at is not None:
         if not manifest_path.exists():
             raise FreezeError(f"{snapshot_id} is frozen but {manifest_path} is missing")
-        return FreezeResult(manifest_path, True, _backup(layout, referenced, backup_to))
+        return FreezeResult(manifest_path, True, _backup(engine, layout, referenced, backup_to))
 
     damaged = _verify(store, referenced)
     if damaged:
@@ -157,7 +157,7 @@ def freeze(
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True, default=str) + "\n")
     for path in (db_copy, manifest_path):
         path.chmod(0o444)
-    return FreezeResult(manifest_path, False, _backup(layout, referenced, backup_to))
+    return FreezeResult(manifest_path, False, _backup(engine, layout, referenced, backup_to))
 
 
 def referenced_blobs(conn: Any, snapshot_id: str) -> set[str]:
@@ -190,7 +190,9 @@ def _vacuum_into(engine: Engine, target: Path) -> None:
         conn.exec_driver_sql("VACUUM INTO ?", (str(target),))
 
 
-def _backup(layout: StoreLayout, referenced: set[str], target: Path | None) -> int | None:
+def _backup(
+    engine: Engine, layout: StoreLayout, referenced: set[str], target: Path | None
+) -> int | None:
     """Copy blobs, APKs and frozen copies to ``target``, plus a fresh copy of the live
     database; then re-hash this snapshot's blobs at the destination."""
     if target is None:
@@ -201,8 +203,9 @@ def _backup(layout: StoreLayout, referenced: set[str], target: Path | None) -> i
             _copy_tree(folder, destination / folder.name)
     live_copy = destination / f"mappa-{utc_now().strftime('%Y%m%dT%H%M%SZ')}.sqlite"
     live_copy.parent.mkdir(parents=True, exist_ok=True)
-    _vacuum_into(make_engine(layout.db_path), live_copy)
-    copied = BlobStore(destination / "blobs", make_engine(live_copy))
+    _vacuum_into(engine, live_copy)
+    # Read-only use: get() re-hashes the copied files and never writes through the engine.
+    copied = BlobStore(destination / "blobs", engine)
     damaged = _verify(copied, referenced)
     if damaged:
         raise FreezeError(
