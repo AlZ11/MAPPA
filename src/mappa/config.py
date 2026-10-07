@@ -10,9 +10,9 @@ Why a strict, validated settings object instead of a plain dict:
   from serialisation and ``repr``.
 
 Precedence (later wins): built-in defaults < config.toml < environment variables.
-Relative paths in config.toml are resolved against the file's own directory, so the same
-file points at the same data wherever the command is run from. Empty environment
-variables count as unset.
+Relative paths in config.toml (and the default file locations) are resolved against the
+file's own directory, so the same file points at the same data wherever the command is
+run from. Empty environment variables count as unset.
 """
 
 import os
@@ -32,11 +32,23 @@ from pydantic import (
     model_validator,
 )
 
+from mappa.models.enums import StorePurpose
+from mappa.storage.layout import StoreLayout
+
 DEFAULT_CONFIG_PATH = Path("config/config.toml")
 ENV_CONFIG_PATH = "MAPPA_CONFIG"
 ENV_DATA_DIR = "MAPPA_DATA_DIR"
 ENV_CONTACT_EMAIL = "MAPPA_CONTACT_EMAIL"
 ENV_ANDROZOO_KEY = "ANDROZOO_API_KEY"
+ENV_CHROMIUM = "MAPPA_CHROMIUM_EXECUTABLE"
+
+# File locations, relative to the config file's directory unless config.toml says otherwise.
+_PATH_DEFAULTS = {
+    "reports_dir": "../reports",
+    "queries_file": "queries.txt",
+    "seed_file": "seed_apps.csv",
+    "dev_sample_file": "dev_apps.csv",
+}
 
 # Deliberately loose: we only need to catch "missing" and "obviously not an address".
 _EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}")
@@ -47,7 +59,7 @@ class ConfigError(Exception):
 
 
 class RetrySettings(BaseModel):
-    """How often and how patiently a failed request is retried (used from M1 on)."""
+    """How often and how patiently a failed request is retried."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -62,6 +74,19 @@ class RetrySettings(BaseModel):
         return self
 
 
+class InclusionSettings(BaseModel):
+    """Which candidates enter the sample (task M2). OPEN DECISIONS 1-2: Alex confirms
+    these with the supervisor; they are settings, not code, so changing them is cheap."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    genres: tuple[str, ...] = ("HEALTH_AND_FITNESS", "MEDICAL")
+    free_only: bool = True
+    min_installs: int = Field(default=1000, ge=0)
+    top_n: int = Field(default=800, ge=0)
+    long_tail_n: int = Field(default=200, ge=0)
+
+
 class Settings(BaseModel):
     """Validated, immutable settings for one run. Frozen so the copy stored with a
     snapshot is exactly what the run used."""
@@ -69,6 +94,11 @@ class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     data_dir: Path
+    synthetic_data_dir: Path
+    reports_dir: Path
+    queries_file: Path
+    seed_file: Path
+    dev_sample_file: Path
     country: str = Field(default="au", pattern=r"^[a-z]{2}$")
     lang: str = Field(default="en", pattern=r"^[a-z]{2}$")
     target_n: int = Field(default=1000, gt=0)
@@ -79,11 +109,18 @@ class Settings(BaseModel):
     contact_email: str = Field(default="", validate_default=True)
     rate_limit_per_domain_rps: float = Field(default=1.0, gt=0)
     max_parallel_domains: int = Field(default=4, ge=1)
+    page_timeout_s: float = Field(default=30.0, gt=0)
+    # The task says to render Data Safety pages in the browser. The label is also
+    # embedded in the plain server HTML (that is where the Node scraper reads it), so
+    # "http" is the fallback if the first live check shows the browser copy lacks it.
+    datasafety_fetcher: Literal["browser", "http"] = "browser"
     retry: RetrySettings = RetrySettings()
     random_seed: int = 20261005
+    inclusion: InclusionSettings = InclusionSettings()
     # Only sources that have an implementation are accepted; adding one takes code and
     # supervisor approval, not just a config edit. An empty tuple means "none approved".
-    apk_sources: tuple[Literal["androzoo"], ...] = ("androzoo",)
+    apk_sources: tuple[Literal["androzoo"], ...] = ()
+    chromium_executable: Path | None = None
     androzoo_api_key: SecretStr | None = Field(default=None, exclude=True, repr=False)
 
     @field_validator("contact_email")
@@ -100,37 +137,48 @@ class Settings(BaseModel):
             raise ValueError(f"contact_email {value!r} is not an email address")
         return value
 
-    @field_validator("data_dir")
+    @field_validator(
+        "data_dir",
+        "synthetic_data_dir",
+        "reports_dir",
+        "queries_file",
+        "seed_file",
+        "dev_sample_file",
+    )
     @classmethod
-    def _data_dir_absolute(cls, value: Path) -> Path:
+    def _absolute(cls, value: Path) -> Path:
         if not value.is_absolute():
-            raise ValueError("data_dir must be absolute once resolved (load_config does this)")
+            raise ValueError("paths must be absolute once resolved (load_config does this)")
         return value
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        real, synthetic = self.data_dir, self.synthetic_data_dir
+        if real == synthetic or real in synthetic.parents or synthetic in real.parents:
+            raise ValueError(
+                "synthetic_data_dir and data_dir must be separate directories, neither "
+                "inside the other: synthetic and real data never share a store"
+            )
+        if self.inclusion.top_n + self.inclusion.long_tail_n != self.target_n:
+            raise ValueError("inclusion.top_n + inclusion.long_tail_n must equal target_n")
+        return self
 
     @property
     def http_user_agent(self) -> str:
         """The User-Agent sent with every request: names the project and a contact."""
         return f"{self.user_agent} (+mailto:{self.contact_email})"
 
-    @property
-    def db_path(self) -> Path:
-        return self.data_dir / "mappa.sqlite"
+    def layout(self, purpose: StorePurpose) -> StoreLayout:
+        """The directory layout for real or synthetic data. Synthetic reports stay inside
+        the synthetic data dir, so they can never land next to the real ones."""
+        if purpose is StorePurpose.SYNTHETIC:
+            root = self.synthetic_data_dir
+            return StoreLayout(root=root, reports_dir=root / "reports")
+        return StoreLayout(root=self.data_dir, reports_dir=self.reports_dir)
 
-    @property
-    def blobs_dir(self) -> Path:
-        return self.data_dir / "blobs"
-
-    @property
-    def apks_dir(self) -> Path:
-        return self.data_dir / "apks"
-
-    @property
-    def logs_dir(self) -> Path:
-        return self.data_dir / "logs"
-
-    @property
-    def log_file(self) -> Path:
-        return self.logs_dir / "mappa.jsonl"
+    def snapshot_config(self) -> dict[str, Any]:
+        """The settings as stored with a snapshot. Secrets are excluded by the model."""
+        return self.model_dump(mode="json")
 
 
 def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) -> Settings:
@@ -158,20 +206,32 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             f"to git. Set {ENV_ANDROZOO_KEY} in the environment instead."
         )
 
+    base = config_path.parent
     values: dict[str, Any] = dict(raw)
-    if isinstance(values.get("data_dir"), str):
-        values["data_dir"] = (config_path.parent / Path(values["data_dir"]).expanduser()).resolve()
+    for key, default in _PATH_DEFAULTS.items():
+        values[key] = values.get(key, default)
+    for key in [*_PATH_DEFAULTS, "data_dir", "synthetic_data_dir"]:
+        if isinstance(values.get(key), str):
+            values[key] = _resolve(base, values[key])
     if data_dir := _env_path(env, ENV_DATA_DIR):
         values["data_dir"] = data_dir.expanduser().resolve()  # relative to the shell's cwd
+    if "synthetic_data_dir" not in values and isinstance(values.get("data_dir"), Path):
+        values["synthetic_data_dir"] = values["data_dir"].parent / "data-dev"
     if contact := env.get(ENV_CONTACT_EMAIL):
         values["contact_email"] = contact
-    if key := env.get(ENV_ANDROZOO_KEY):
-        values["androzoo_api_key"] = key
+    if chromium := _env_path(env, ENV_CHROMIUM):
+        values["chromium_executable"] = chromium.expanduser().resolve()
+    if api_key := env.get(ENV_ANDROZOO_KEY):
+        values["androzoo_api_key"] = api_key
 
     try:
         return Settings.model_validate(values)
     except ValidationError as exc:
         raise ConfigError(_describe(config_path, exc)) from None
+
+
+def _resolve(base: Path, value: str) -> Path:
+    return (base / Path(value).expanduser()).resolve()
 
 
 def _env_path(env: Mapping[str, str], name: str) -> Path | None:

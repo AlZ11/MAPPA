@@ -3,18 +3,31 @@
 # The effective settings are copied into the `snapshots` table when a snapshot starts,
 # so every snapshot can be traced back to the exact values that produced it.
 # Relative paths are resolved against this file's directory, not the shell's.
-# Environment overrides: MAPPA_CONFIG (which file), MAPPA_DATA_DIR, MAPPA_CONTACT_EMAIL.
+# Environment overrides: MAPPA_CONFIG (which file), MAPPA_DATA_DIR, MAPPA_CONTACT_EMAIL,
+# MAPPA_CHROMIUM_EXECUTABLE (only if Playwright's own Chromium can't be installed).
 # Secrets (ANDROZOO_API_KEY) come from the environment only: never put them here.
 
-# Where the SQLite db, blobs, APKs and logs live. Gitignored.
+# Where real evidence lives: SQLite db, blobs, APKs, logs. Gitignored.
 # OPEN DECISION 4 (Alex/supervisor): CSIRO storage vs laptop, retention rules.
 data_dir = "../data"
+
+# Synthetic test data for plumbing runs (`mappa --synthetic ...`). Always a separate
+# directory: the code refuses to mix synthetic and real data. Gitignored.
+synthetic_data_dir = "../data-dev"
+
+# Coverage reports for real snapshots (synthetic ones stay inside synthetic_data_dir).
+reports_dir = "../reports"
+
+# Inputs, relative to this directory.
+queries_file = "queries.txt"
+seed_file = "seed_apps.csv"
+dev_sample_file = "dev_apps.csv"
 
 # Which Google Play store to sample, and the listing language.
 country = "au"
 lang = "en"
 
-# Target sample size for the snapshot.
+# Target sample size for the snapshot (= inclusion.top_n + inclusion.long_tail_n).
 target_n = 1000
 
 # Identifies the project in every request; contact_email is appended to it.
@@ -22,22 +35,34 @@ user_agent = "MAPPA-2.0-research-crawler/0.1 (academic mHealth privacy study)"
 
 # REQUIRED. OPEN DECISION 5: the project/CSIRO contact address, supplied by Alex.
 # Never a personal address. Every command refuses to run until this is set, here or
-# via MAPPA_CONTACT_EMAIL.
+# via MAPPA_CONTACT_EMAIL, and live requests refuse placeholder domains (example.org).
 # contact_email = ""
 
 # Politeness limits (CLAUDE.md ethics rules).
 rate_limit_per_domain_rps = 1.0
 max_parallel_domains = 4
 
+# Cap for loading one page in the browser (load + network idle), in seconds.
+page_timeout_s = 30.0
+
 # Fixed before any data is seen, so the long-tail sample can't be re-drawn until it
 # looks good. Recorded with every snapshot.
 random_seed = 20261005
 
-# OPEN DECISION 3: is AndroZoo approved? Only implemented sources are accepted.
-# An empty list means no source is approved: APKs are recorded as `skipped`.
-apk_sources = ["androzoo"]
+# OPEN DECISION 3: no APK source is approved yet. AndroZoo needs an API key, and
+# F-Droid was ruled out (it carries only open-source apps, built differently from the
+# Play Store versions). With no source, fetch-apk records every app as `skipped`.
+apk_sources = []
 
 [retry]
 max_attempts = 4
 backoff_initial_s = 2.0
 backoff_max_s = 60.0
+
+# OPEN DECISIONS 1-2 (Alex/supervisor): the defaults from the task file.
+[inclusion]
+genres = ["HEALTH_AND_FITNESS", "MEDICAL"]
+free_only = true
+min_installs = 1000
+top_n = 800
+long_tail_n = 200

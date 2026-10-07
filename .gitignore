@@ -12,6 +12,7 @@ dist/
 # Research data never goes in git (CLAUDE.md: never commit APKs or raw data).
 # data_dir defaults to ./data; the patterns below also catch data kept elsewhere.
 /data/
+/data-dev/
 *.apk
 *.sqlite
 *.sqlite-wal
