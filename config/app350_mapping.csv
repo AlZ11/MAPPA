@@ -1,0 +1,59 @@
+app350_practice,status,category,data_type,recipient,note
+Contact_1stParty,category_only,Personal info,,first_party,unspecified contact data: no single Data Safety type
+Contact_3rdParty,category_only,Personal info,,third_party,unspecified contact data: no single Data Safety type
+Contact_Address_Book_1stParty,mapped,Contacts,Contacts,first_party,
+Contact_Address_Book_3rdParty,mapped,Contacts,Contacts,third_party,
+Contact_City_1stParty,mapped,Personal info,Address,first_party,city treated as part of the user's address (static data); arguably Approximate location
+Contact_City_3rdParty,mapped,Personal info,Address,third_party,city treated as part of the user's address (static data); arguably Approximate location
+Contact_E_Mail_Address_1stParty,mapped,Personal info,Email address,first_party,
+Contact_E_Mail_Address_3rdParty,mapped,Personal info,Email address,third_party,
+Contact_Password_1stParty,unmapped,,,first_party,"passwords are credentials, not a Data Safety data type"
+Contact_Password_3rdParty,unmapped,,,third_party,"passwords are credentials, not a Data Safety data type"
+Contact_Phone_Number_1stParty,mapped,Personal info,Phone number,first_party,
+Contact_Phone_Number_3rdParty,mapped,Personal info,Phone number,third_party,
+Contact_Postal_Address_1stParty,mapped,Personal info,Address,first_party,
+Contact_Postal_Address_3rdParty,mapped,Personal info,Address,third_party,
+Contact_ZIP_1stParty,mapped,Personal info,Address,first_party,postcode treated as part of the address
+Contact_ZIP_3rdParty,mapped,Personal info,Address,third_party,postcode treated as part of the address
+Demographic_1stParty,category_only,Personal info,,first_party,unspecified demographics: no single Data Safety type
+Demographic_3rdParty,category_only,Personal info,,third_party,unspecified demographics: no single Data Safety type
+Demographic_Age_1stParty,mapped,Personal info,Other info,first_party,age/birth date has no own type; Other info is the closest (check Google's definition)
+Demographic_Age_3rdParty,mapped,Personal info,Other info,third_party,age/birth date has no own type; Other info is the closest (check Google's definition)
+Demographic_Gender_1stParty,mapped,Personal info,Other info,first_party,gender has no own type; Other info is the closest (check Google's definition)
+Demographic_Gender_3rdParty,mapped,Personal info,Other info,third_party,gender has no own type; Other info is the closest (check Google's definition)
+Identifier_1stParty,category_only,Device or other IDs,,first_party,unspecified identifiers: could also be User IDs
+Identifier_3rdParty,category_only,Device or other IDs,,third_party,unspecified identifiers: could also be User IDs
+Identifier_Ad_ID_1stParty,mapped,Device or other IDs,Device or other IDs,first_party,
+Identifier_Ad_ID_3rdParty,mapped,Device or other IDs,Device or other IDs,third_party,
+Identifier_Cookie_or_similar_Tech_1stParty,unmapped,,,first_party,cookies/pixels have no Data Safety equivalent (task brief's example)
+Identifier_Cookie_or_similar_Tech_3rdParty,unmapped,,,third_party,cookies/pixels have no Data Safety equivalent (task brief's example)
+Identifier_Device_ID_1stParty,mapped,Device or other IDs,Device or other IDs,first_party,
+Identifier_Device_ID_3rdParty,mapped,Device or other IDs,Device or other IDs,third_party,
+Identifier_IMEI_1stParty,mapped,Device or other IDs,Device or other IDs,first_party,
+Identifier_IMEI_3rdParty,mapped,Device or other IDs,Device or other IDs,third_party,
+Identifier_IMSI_1stParty,unmapped,,,first_party,no Data Safety equivalent (task brief's example); arguably Device or other IDs
+Identifier_IMSI_3rdParty,unmapped,,,third_party,no Data Safety equivalent (task brief's example); arguably Device or other IDs
+Identifier_IP_Address_1stParty,unmapped,,,first_party,an IP address is not itself a Data Safety data type; IP-derived location is Location_IP_Address
+Identifier_IP_Address_3rdParty,unmapped,,,third_party,an IP address is not itself a Data Safety data type; IP-derived location is Location_IP_Address
+Identifier_MAC_1stParty,mapped,Device or other IDs,Device or other IDs,first_party,
+Identifier_MAC_3rdParty,mapped,Device or other IDs,Device or other IDs,third_party,
+Identifier_Mobile_Carrier_1stParty,unmapped,,,first_party,"carrier name identifies a network, not the user or device"
+Identifier_Mobile_Carrier_3rdParty,unmapped,,,third_party,"carrier name identifies a network, not the user or device"
+Identifier_SIM_Serial_1stParty,mapped,Device or other IDs,Device or other IDs,first_party,
+Identifier_SIM_Serial_3rdParty,mapped,Device or other IDs,Device or other IDs,third_party,
+Identifier_SSID_BSSID_1stParty,unmapped,,,first_party,"Wi-Fi network identifiers: no Data Safety type, though they can reveal location"
+Identifier_SSID_BSSID_3rdParty,unmapped,,,third_party,"Wi-Fi network identifiers: no Data Safety type, though they can reveal location"
+Location_1stParty,category_only,Location,,first_party,unspecified location: matches Approximate or Precise
+Location_3rdParty,category_only,Location,,third_party,unspecified location: matches Approximate or Precise
+Location_Bluetooth_1stParty,mapped,Location,Precise location,first_party,dataset instructions group Bluetooth with fine-grained location
+Location_Bluetooth_3rdParty,mapped,Location,Precise location,third_party,dataset instructions group Bluetooth with fine-grained location
+Location_Cell_Tower_1stParty,mapped,Location,Approximate location,first_party,dataset instructions group cell towers with coarse location
+Location_Cell_Tower_3rdParty,mapped,Location,Approximate location,third_party,dataset instructions group cell towers with coarse location
+Location_GPS_1stParty,mapped,Location,Precise location,first_party,
+Location_GPS_3rdParty,mapped,Location,Precise location,third_party,
+Location_IP_Address_1stParty,mapped,Location,Approximate location,first_party,
+Location_IP_Address_3rdParty,mapped,Location,Approximate location,third_party,
+Location_WiFi_1stParty,mapped,Location,Precise location,first_party,dataset instructions group Wi-Fi with fine-grained location
+Location_WiFi_3rdParty,mapped,Location,Precise location,third_party,dataset instructions group Wi-Fi with fine-grained location
+SSO,unmapped,,,,"data received from a sign-in provider: Data Safety records data types, not their source; no party in APP-350"
+Facebook_SSO,unmapped,,,,"as SSO, for Facebook sign-in; no party in APP-350"

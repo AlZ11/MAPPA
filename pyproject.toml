@@ -12,6 +12,8 @@ dependencies = [
     "py3langid>=0.4.0",
     "pydantic>=2.13.5",
     "pypdf>=6.19.0",
+    "pyyaml>=6.0.3",
+    "scikit-learn>=1.9.1",
     "sqlalchemy>=2.1.1",
     "structlog>=26.1.0",
     "tenacity>=9.1.4",
@@ -52,7 +54,7 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 # Untyped third-party libraries: calls into them return Any, so their results are
 # validated before use (see parse/play_data.py and parse/policy_text.py).
-module = ["google_play_scraper.*", "py3langid.*", "trafilatura.*", "lxml", "lxml.*"]
+module = ["google_play_scraper.*", "py3langid.*", "trafilatura.*", "lxml", "lxml.*", "sklearn.*", "yaml", "yaml.*"]
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]

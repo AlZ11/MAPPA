@@ -1,0 +1,26 @@
+# Policy reader (Task 02a). Separate from config.toml: the reader never touches the
+# collector. Relative paths are resolved against this file's directory.
+
+# Gitignored: raw/ (APP-350 zip), canonical/, runs/, llm_cache/.
+data_dir = "../data-public"
+
+# APP-350 ships the official 188/62/100 split, so no seeded split is configured.
+
+[llm]
+# OPEN DECISIONS 1-2 (Alex/supervisor): provider, model, and whether APP-350 text may be
+# sent to an external service at all. Commands that call a model refuse until set.
+# provider = ""
+# model = ""
+temperature = 0.0
+max_output_tokens = 1024
+# Name of the environment variable holding the API key (never the key itself).
+# api_key_env = ""
+
+[prices]
+# AUD per million tokens, from the provider's price list. --dry-run needs both.
+# input_aud_per_mtok = 0.0
+# output_aud_per_mtok = 0.0
+
+[estimate]
+chars_per_token = 4.0
+output_tokens_per_paragraph = 150
