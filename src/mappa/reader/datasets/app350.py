@@ -69,6 +69,47 @@ DATA_TYPES: tuple[str, ...] = (
 NO_PARTY: tuple[str, ...] = ("SSO", "Facebook_SSO")
 PRACTICES: tuple[str, ...] = DATA_TYPES + NO_PARTY
 
+# Practices with at least 10 positive (yes or conflict) test policies: the ones overall
+# averages are computed over (DATA_APP350.md section 7). Fixed here, from R0's count,
+# so that later milestones never need to read test labels to know what to score.
+EVALUABLE_NAMES: tuple[str, ...] = (
+    "Contact_1stParty",
+    "Contact_Address_Book_1stParty",
+    "Contact_City_1stParty",
+    "Contact_E_Mail_Address_1stParty",
+    "Contact_E_Mail_Address_3rdParty",
+    "Contact_Password_1stParty",
+    "Contact_Phone_Number_1stParty",
+    "Contact_Postal_Address_1stParty",
+    "Contact_ZIP_1stParty",
+    "Demographic_1stParty",
+    "Demographic_3rdParty",
+    "Demographic_Age_1stParty",
+    "Demographic_Age_3rdParty",
+    "Demographic_Gender_1stParty",
+    "Facebook_SSO",
+    "Identifier_1stParty",
+    "Identifier_Ad_ID_1stParty",
+    "Identifier_Ad_ID_3rdParty",
+    "Identifier_Cookie_or_similar_Tech_1stParty",
+    "Identifier_Cookie_or_similar_Tech_3rdParty",
+    "Identifier_Device_ID_1stParty",
+    "Identifier_Device_ID_3rdParty",
+    "Identifier_IMEI_1stParty",
+    "Identifier_IP_Address_1stParty",
+    "Identifier_IP_Address_3rdParty",
+    "Identifier_MAC_1stParty",
+    "Identifier_Mobile_Carrier_1stParty",
+    "Location_1stParty",
+    "Location_3rdParty",
+    "Location_Bluetooth_1stParty",
+    "Location_Cell_Tower_1stParty",
+    "Location_GPS_1stParty",
+    "Location_IP_Address_1stParty",
+    "Location_WiFi_1stParty",
+    "SSO",
+)
+
 _SUFFIX = {Party.FIRST: "_1stParty", Party.THIRD: "_3rdParty"}
 _MODALITY = {"PERFORMED": Modality.PERFORMED, "NOT_PERFORMED": Modality.NOT_PERFORMED}
 _SPLIT = {"TRAINING": "train", "VALIDATION": "validation", "TEST": "test"}
@@ -103,6 +144,10 @@ def parse_label_name(name: str) -> PracticeKey:
     raise App350Error(f"unknown APP-350 label {name!r}")
 
 
+def evaluable_keys() -> list[PracticeKey]:
+    return [parse_label_name(name) for name in EVALUABLE_NAMES]
+
+
 def normalize_key(key: PracticeKey) -> PracticeKey:
     """Party carries no meaning for SSO practices: fold it to first_party."""
     practice, party = key
@@ -129,6 +174,19 @@ def read_zip(zip_path: Path) -> tuple[list[Policy], Split]:
         test=tuple(sorted(splits["test"], key=int)),
     )
     return policies, split
+
+
+def read_zip_text(zip_path: Path, filename: str) -> str:
+    """A top-level file of the dataset (e.g. ``features.yml``), read from the zip."""
+    with zipfile.ZipFile(zip_path) as archive:
+        names = [
+            n
+            for n in archive.namelist()
+            if "__MACOSX" not in n.split("/") and n.split("/")[-1] == filename
+        ]
+        if len(names) != 1:
+            raise App350Error(f"{zip_path}: expected one {filename}, found {names}")
+        return archive.read(names[0]).decode("utf-8")
 
 
 def parse_document(document: dict[str, Any], *, source: str) -> tuple[Policy, str]:
