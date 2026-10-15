@@ -100,3 +100,4 @@ docs/
 - After each milestone: run tests, run on the 20-app dev sample, print the coverage
   summary, then stop and report.
 - Do not build beyond the current task file. Put ideas in `docs/IDEAS.md`.
+- Work in small steps. One milestone at a time. Before writing code, explain the plan in plain English and wait for approval. After each milestone, give a summary of at most 10 lines (what changed, why, what to check), then stop until Alex says go.

@@ -13,6 +13,8 @@ dist/
 # data_dir defaults to ./data; the patterns below also catch data kept elsewhere.
 /data/
 /data-dev/
+/data-public/
+
 *.apk
 *.sqlite
 *.sqlite-wal
