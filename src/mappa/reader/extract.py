@@ -10,13 +10,28 @@ The rule (task brief R3), applied to every claim:
 Nothing else is normalised, case included: a quote that only matches after rewording is
 not a quote.
 
-The per-paragraph AI extraction loop is added once the APP-350 practice list is known.
+``Extractor`` runs the loop: one request per paragraph and run number, through the
+cached client. A paragraph whose call fails or whose reply breaks the schema is
+``failed``, counted and reported, and never treated as "no claims" (CLAUDE.md principle
+4: unknown is not absent). ``BudgetExceeded`` is not caught: it stops the whole run.
 """
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from enum import StrEnum
 
-from mappa.reader.canonical import Claim
+from mappa.reader.canonical import Claim, Policy, Segment
+from mappa.reader.datasets.app350 import normalize_key
+from mappa.reader.llm.client import CachedClient, ProviderError, Request
+from mappa.reader.llm.prompt import (
+    FewShotExample,
+    PracticeDefinition,
+    PromptError,
+    build_prompt,
+    claim_tool_schema,
+    parse_claims,
+)
+from mappa.reader.settings import LLMSettings
 
 _SAME_CHARACTER = str.maketrans(
     {
@@ -84,3 +99,60 @@ def verify_claims(
         else:
             verified.append(VerifiedClaim(claim, segment_idx, match))
     return verified, rejected
+
+
+@dataclass
+class SegmentResult:
+    policy_id: str
+    segment_idx: int
+    run: int
+    status: str  # "ok" or "failed"
+    verified: list[VerifiedClaim] = field(default_factory=list)
+    rejected: list[RejectedClaim] = field(default_factory=list)
+    error: str | None = None
+
+
+@dataclass
+class Extractor:
+    client: CachedClient
+    llm: LLMSettings
+    definitions: Sequence[PracticeDefinition]
+    examples: Sequence[FewShotExample]
+
+    def __post_init__(self) -> None:
+        self.names = [d.name for d in self.definitions]
+        self.schema = claim_tool_schema(self.names)
+
+    def request(self, paragraph: str) -> Request:
+        if not self.llm.model:
+            raise PromptError("no model configured in reader.toml [llm]")
+        system, user = build_prompt(self.definitions, self.examples, paragraph)
+        return Request(
+            model=self.llm.model,
+            system=system,
+            user=user,
+            tool_schema=self.schema,
+            temperature=self.llm.temperature,
+            max_output_tokens=self.llm.max_output_tokens,
+        )
+
+    def segment(self, policy_id: str, segment: Segment, run: int) -> SegmentResult:
+        try:
+            reply = self.client.complete(
+                self.request(segment.text), paragraph=segment.text, run=run
+            )
+            claims = [_fold_sso(c) for c in parse_claims(reply.payload, self.names)]
+        except (ProviderError, PromptError) as exc:
+            return SegmentResult(policy_id, segment.idx, run, "failed", error=str(exc))
+        verified, rejected = verify_claims(claims, segment.text, segment.idx)
+        return SegmentResult(policy_id, segment.idx, run, "ok", verified, rejected)
+
+    def policy(self, policy: Policy, run: int) -> list[SegmentResult]:
+        return [self.segment(policy.policy_id, s, run) for s in policy.segments]
+
+
+def _fold_sso(claim: Claim) -> Claim:
+    """SSO practices carry no party in APP-350; the prompt asks for first_party, and
+    this makes sure a stray third_party can't create a label that doesn't exist."""
+    _, party = normalize_key(claim.key)
+    return claim if party is claim.party else claim.model_copy(update={"party": party})

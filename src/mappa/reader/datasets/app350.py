@@ -22,6 +22,7 @@ than being skipped. A silently dropped label would quietly change the answer key
 
 import io
 import json
+import re
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -177,16 +178,33 @@ def read_zip(zip_path: Path) -> tuple[list[Policy], Split]:
 
 
 def read_zip_text(zip_path: Path, filename: str) -> str:
-    """A top-level file of the dataset (e.g. ``features.yml``), read from the zip."""
+    """A dataset file by its path inside the top folder (``features.yml``,
+    ``documentation/README.md``), read from the zip."""
     with zipfile.ZipFile(zip_path) as archive:
         names = [
             n
             for n in archive.namelist()
-            if "__MACOSX" not in n.split("/") and n.split("/")[-1] == filename
+            if "__MACOSX" not in n.split("/") and n.split("/", 1)[-1] == filename
         ]
         if len(names) != 1:
             raise App350Error(f"{zip_path}: expected one {filename}, found {names}")
         return archive.read(names[0]).decode("utf-8")
+
+
+_TABLE_ROW = re.compile(r"^\|\s*([A-Za-z_]+)\s*\|\s*(.+?)\s*\|\s*$", re.MULTILINE)
+
+
+def practice_definitions(zip_path: Path) -> dict[str, str]:
+    """{practice name: one-line definition} from the dataset README's table.
+
+    Read at runtime, never copied into the repo (licence). All 30 practice names must
+    have a definition; other table rows (headers) are ignored.
+    """
+    rows = dict(_TABLE_ROW.findall(read_zip_text(zip_path, "README.md")))
+    missing = [p for p in PRACTICES if p not in rows]
+    if missing:
+        raise App350Error(f"{zip_path}: README has no definition for {missing}")
+    return {p: rows[p] for p in PRACTICES}
 
 
 def parse_document(document: dict[str, Any], *, source: str) -> tuple[Policy, str]:

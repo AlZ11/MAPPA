@@ -233,3 +233,115 @@ Per practice (F1, evaluable practices, all 62 validation policies):
   blocked here (R0), and comparing with test-set numbers would be like-for-unlike anyway.
 - The `global` vs `per_practice` default is a method choice made on validation evidence;
   flagged for Alex before R4.
+
+---
+
+## R3 (offline parts only): the AI engine, no live calls
+
+**Built:** everything in the AI engine except a real provider:
+- the versioned prompt (`app350-v1`), with definitions and train-only few-shot examples loaded at runtime;
+- a schema that forces the reply shape, plus pydantic validation;
+- quote verification (exact / normalised / rejected);
+- a cache that makes re-runs free, plus budget stop and `--dry-run` cost estimate;
+- the per-paragraph loop and the per-policy combining step;
+- `python -m mappa.reader extract --split val|test [--runs N] [--dry-run] [--max-cost AUD]`.
+
+No provider is registered, so a real run refuses with "nothing was sent". Tests use recorded, made-up replies.
+
+**Decisions**
+| Decision | Why |
+|---|---|
+| The model outputs 30 practice names (`Location_GPS`, `SSO`...) with `party` as a separate field; its schema `enum` lists only those 30 | As the brief's claim table specifies. A reply outside the list fails pydantic validation even if a provider ignores the schema |
+| Definitions: the 30 one-liners from the dataset's top-level README table, read from the zip at each run | The brief says "definitions from the dataset documentation". Never committed (licence). Loader refuses if any is missing |
+| `SSO` / `Facebook_SSO`: the prompt says "always first_party"; code folds any stray `third_party` to first | APP-350 has no party for them (R1 convention); a stray party can't create a label that doesn't exist |
+| Few-shot: 4 train paragraphs, one each of first-party, third-party, negation, no-practice; chosen at random with seed 0; only real (non-synthetic) policies, 40–300 characters; the quote = the whole paragraph | Covers each behaviour the rules ask for. Test has no synthetic text. APP-350 labels paragraphs, not sentences, so a whole short paragraph is the only quote the labels support. Chosen: policies 202, 198, 140, 181 (all train). `build_prompt` refuses any non-train example |
+| Cache key = provider + model + prompt version + temperature + max tokens + **system-prompt hash + schema hash** + paragraph hash + run number | Brief's key plus two hashes: definitions and examples are loaded at runtime, so the version string alone can't prove two prompts are identical |
+| Identical paragraph text → one call per run (shared cache key) | Follows from keying on the paragraph hash. Only 6 of 2,651 validation paragraphs are repeats, so this barely matters |
+| A failed call or an off-schema reply → paragraph `failed`, counted in `stats.segments_failed`; its claims are never "none" | CLAUDE.md principle 4. The policy's answers then come from the paragraphs that succeeded; the failure count is in the run record |
+| `BudgetExceeded` stops the run (record stays `started`); finished paragraphs are cached, so re-running continues for free | Principle 5 (resumable); `--max-cost` is checked before each call using the worst case (max output tokens) |
+| `--dry-run` reports token counts even without prices | Prices aren't set (open decision 1). Token counts let Alex price any provider |
+| `--split test` needs `--final` even for a dry run | So test policies aren't read for anything but the one final run (hard stop) |
+| Metrics per AI run, plus made-up-answer rate (rejected / all claims) and stability (share of answers identical across runs) | The brief's R4 table; computed now so R4 is just running it |
+
+**Results: `--dry-run`, validation split (estimate, 4 characters/token, 150 output tokens/paragraph)**
+
+| | 1 run | 3 runs (stability) |
+|---|---:|---:|
+| Policies / paragraphs | 62 / 2,651 (2,645 distinct) | same |
+| Calls | 2,645 | 7,935 |
+| Input tokens | ~5.40 M | ~16.19 M |
+| Output tokens | ~0.40 M | ~1.19 M |
+| Cost (AUD) | **prices not set** | **prices not set** |
+
+Cost = input Mtok × input price + output Mtok × output price, so roughly
+`5.40 × input + 0.40 × output` AUD per validation run at per-million-token prices.
+
+**Key finding:** the system prompt (definitions + 4 examples) is ~1,940 tokens and is
+repeated in every call. That's **95% of input tokens**; the paragraphs themselves are only
+~0.26 M tokens. Two ways to cut cost, neither done (both need Alex's choice):
+1. **provider prompt caching** (cheaper repeated prefix): no change to the method;
+2. **several paragraphs per call**: changes the method; needs a new prompt version.
+
+Checks: `ruff`, `mypy` (strict, 62 files) clean; `pytest` 275 passed (69 reader tests),
+with the one container-only browser test excluded as in R1. A real
+`extract --split val` refused with "no AI provider/model set ... nothing was sent", and
+no `llm_cache/` was created.
+
+**Unsure about**
+- The 4-character-per-token estimate and 150 output tokens per paragraph are guesses.
+  Most paragraphs have no claims (short reply), so output is probably overestimated. A
+  10-paragraph pilot run would calibrate both.
+- Whole-paragraph quotes in examples teach the model that long quotes are fine. The
+  rules ask for "the exact supporting sentence(s)", and the examples are short, but a
+  pilot should check quote length.
+- No error analysis or accuracy for the AI engine yet: that needs live calls.
+
+---
+
+## For Alex to review
+
+Stopped here: the next step (any AI call) is a hard stop. Ordered by what blocks progress.
+
+**Decisions only you / your supervisor can make (block R3 live runs)**
+1. **Provider, model, who pays, budget cap** (open decision 1). Then fill `[llm]` and
+   `[prices]` in `config/reader.toml`, and set the key's environment variable name in `api_key_env`.
+   One provider adapter is then needed in `engine.PROVIDERS` (small, but it means a live call to verify).
+2. **Licence: may APP-350 text be sent to an external AI service?** (open decisions 2–3).
+   If not: a local open-weight model.
+3. **Prompt caching / batching** to cut the ~95% repeated-prompt cost (R3 key finding).
+
+**Please check**
+4. **The paper's metrics and level** (DATA_APP350.md §6): blocked here. Confirm that its main table is
+   per-policy NPV / specificity / negative F1, and what counts as "negative".
+5. **`config/app350_mapping.csv`**, especially:
+   - Age/Gender → Other info;
+   - Identifier_IP_Address unmapped;
+   - broad `Identifier` → Device or other IDs;
+   - City/ZIP → Address (R1 "Unsure about").
+6. **Synthetic data**: kept in train/validation (like the paper); validation is also reported on the 26 real
+   policies. Dropping them from training is a research choice.
+7. **TF-IDF threshold mode for R4**: I propose `global` (split-half evidence in R2).
+   Confirm before the test run.
+8. **Using `features.yml`** (the authors' term lists) as the keyword baseline's terms:
+   cite Story et al., PAL 2019. The alternative is hand-written lists.
+9. **Few-shot choice** (4 examples, seed 0, real train policies only) and whole-paragraph quotes in them.
+10. **SSO party convention**: stored as first party, party ignored.
+
+**Changes outside `src/mappa/reader/` (please approve)**
+11. `pyproject.toml` / `uv.lock`: added `pyyaml` and `scikit-learn`, plus `yaml` / `sklearn` in the
+    mypy override. `config/reader.toml` and `config/app350_mapping.csv` are new files.
+12. **`mappa reader` hookup**: commands run as `uv run python -m mappa.reader ...`.
+    Adding `app.add_typer(reader_app, name="reader")` to `src/mappa/cli.py` is one line, but
+    it's collector code, so I didn't touch it.
+
+**Housekeeping noticed (not touched)**
+13. `.DS_Store` files were committed in `e38c09b` (repo root, `docs/`). Suggest `git rm --cached`
+    them and add `.DS_Store` to `.gitignore`.
+14. `tests/test_browser_fetcher.py` fails in this cloud container (Playwright wants Chromium
+    1243, but 1194 is installed). It's not a code problem, but it also breaks
+    `test_cli::test_init_is_idempotent` in the same run, through a leaked-subprocess warning.
+
+**Data hygiene check:** no APP-350 text is in git. Tests use made-up sentences, committed
+results are aggregate numbers and label names, and definitions, `features.yml` and few-shot
+paragraphs are read from the zip at runtime. Raw zip, canonical JSONL and runs stay in
+the gitignored `data-public/`.

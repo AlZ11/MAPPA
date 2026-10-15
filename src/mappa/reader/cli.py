@@ -7,6 +7,7 @@ must not change; the one-line hookup is left for Alex (READER_LOG.md).
 Known problems (missing zip, bad config, unset prices...) print one line, not a traceback.
 """
 
+import json
 from pathlib import Path
 from typing import Annotated, Any, NoReturn
 
@@ -29,7 +30,11 @@ from mappa.reader.datasets.app350 import (
     write_canonical,
 )
 from mappa.reader.datasets.split import CLI_NAMES
+from mappa.reader.engine import METHOD as LLM_METHOD
+from mappa.reader.engine import EngineError, dry_run, extract_split, prompt_parts, provider_for
 from mappa.reader.evaluate import POSITIVE, report
+from mappa.reader.llm.client import BudgetExceeded, CostEstimate, PricesMissing
+from mappa.reader.llm.prompt import PROMPT_VERSION, PromptError
 from mappa.reader.mapping import DEFAULT_PATH as MAPPING_PATH
 from mappa.reader.mapping import MappingError, load_mapping
 from mappa.reader.runs import Run, completed_test_runs, file_sha256
@@ -46,6 +51,10 @@ app = typer.Typer(help="Policy reader on APP-350 (Task 02a).", no_args_is_help=T
 
 _KNOWN_ERRORS: tuple[type[Exception], ...] = (
     App350Error,
+    BudgetExceeded,
+    EngineError,
+    PricesMissing,
+    PromptError,
     FeaturesError,
     MappingError,
     ReaderConfigError,
@@ -108,12 +117,16 @@ def _split_name(split: str) -> str:
     return CLI_NAMES[split]
 
 
-def _guard_test(settings: ReaderSettings, split: str, method: str, final: bool) -> None:
+def _guard_test(
+    settings: ReaderSettings, split: str, method: str, final: bool, *, scoring: bool = True
+) -> None:
     """The test split is scored once per method, after the method is frozen (brief R4)."""
     if split != "test":
         return
     if not final:
         _fail("--split test is the one final run per method (R4); add --final to confirm")
+    if not scoring:
+        return
     done = completed_test_runs(settings.runs_dir, method)
     if done:
         _fail(f"{method} already has a test run ({done[0]}); the test split is used once")
@@ -226,3 +239,79 @@ def _echo_summary(metrics: dict[str, Any]) -> None:
             f"{fmt(m['groups']['first_party']['f1']):>7}{fmt(m['groups']['third_party']['f1']):>7}"
             f"{fmt(no['exact_rate']):>7}{fmt(m['answers']['exact_accuracy']):>6}"
         )
+
+
+@app.command()
+def extract(
+    split: SplitOption = "val",
+    runs: Annotated[int, typer.Option("--runs", min=1, help="Repeat runs (stability).")] = 1,
+    dry_run_: Annotated[
+        bool, typer.Option("--dry-run", help="Estimate tokens and cost; send nothing.")
+    ] = False,
+    max_cost: Annotated[
+        float | None, typer.Option("--max-cost", help="Stop before spending more AUD.")
+    ] = None,
+    final: FinalOption = False,
+    config: ConfigOption = DEFAULT_PATH,
+) -> None:
+    """The AI engine: per-paragraph claims, verified quotes, per-policy answers."""
+    settings = _settings(config)
+    split_name = _split_name(split)
+    _guard_test(settings, split_name, LLM_METHOD, final, scoring=not dry_run_)
+    try:
+        policies, official = read_canonical(settings.canonical_dir)
+        by_id = {p.policy_id: p for p in policies}
+        chosen = [by_id[i] for i in official.ids(split_name)]
+        parts = prompt_parts(settings, [by_id[i] for i in official.train])
+        if dry_run_:
+            estimate, system_tokens = dry_run(settings, parts, chosen, runs)
+            _echo_estimate(split_name, chosen, runs, estimate, system_tokens, settings)
+            return
+        provider = provider_for(settings)
+        keys = practice_keys()
+        run, metrics = extract_split(
+            settings,
+            parts,
+            chosen,
+            split=split_name,
+            runs=runs,
+            max_cost=max_cost,
+            provider=provider,
+            score=lambda members, table: _metrics_by_subset(members, keys, table),
+        )
+    except _KNOWN_ERRORS as exc:
+        _fail(str(exc))
+    typer.echo(f"run {run.run_id} -> {run.dir}")
+    typer.echo(json.dumps(metrics["stats"], indent=2))
+    for number in range(1, runs + 1):
+        typer.echo(f"run {number}:")
+        _echo_summary(metrics[f"run{number}"])
+
+
+def _echo_estimate(
+    split: str,
+    chosen: list[Policy],
+    runs: int,
+    estimate: CostEstimate,
+    system_tokens: int,
+    settings: ReaderSettings,
+) -> None:
+    paragraphs = sum(len(p.segments) for p in chosen)
+    distinct = len({s.text for p in chosen for s in p.segments})
+    cost = (
+        "prices not set in reader.toml [prices]"
+        if estimate.aud is None
+        else f"{estimate.aud:.2f} AUD"
+    )
+    typer.echo(f"DRY RUN (nothing sent), prompt {PROMPT_VERSION}, split {split}")
+    typer.echo(
+        f"policies {len(chosen)}, paragraphs {paragraphs} ({distinct} distinct texts), runs {runs}"
+    )
+    typer.echo(f"calls {estimate.calls}")
+    typer.echo(f"system prompt ~{system_tokens} tokens (repeated in every call)")
+    typer.echo(
+        f"input ~{estimate.input_tokens} tokens, output ~{estimate.output_tokens} tokens "
+        f"({settings.estimate.chars_per_token} chars/token, "
+        f"{settings.estimate.output_tokens_per_paragraph} output tokens/paragraph)"
+    )
+    typer.echo(f"cost: {cost}")
